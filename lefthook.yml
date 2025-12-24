@@ -18,5 +18,13 @@ pre-commit:
 pre-push:
   parallel: true
   jobs:
+    - group:
+        # Dogfood hooks
+        jobs:
+          - name: Build all hooks
+            run: go build -v -o bin/commit-msg-lint github.com/breml/githooks/cmd/commit-msg-lint
+          - name: Run all hooks
+            run: bin/commit-msg-lint
+            use_stdin: true
     - name: Run tests
       run: go test -v ./...
