@@ -45,7 +45,7 @@ func EvaluateRules(rules []Rule, message ParsedCommitMessage) []RuleViolation {
 }
 
 // shouldSkipAuthor checks if a commit author should be skipped based on patterns.
-func shouldSkipAuthor(name, email string, patterns []string) bool {
+func shouldSkipAuthor(name string, email string, patterns []string) bool {
 	for _, pattern := range patterns {
 		re, err := regexp.Compile(pattern)
 		if err != nil {

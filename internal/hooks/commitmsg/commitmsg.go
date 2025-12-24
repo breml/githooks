@@ -23,7 +23,7 @@ const (
 
 // parseArgs parses command-line arguments and returns base and head refs.
 // Returns empty strings if no flags are provided (stdin mode).
-func parseArgs(config *Config, args []string) (baseRef, headRef string, err error) {
+func parseArgs(config *Config, args []string) (baseRef string, headRef string, err error) {
 	// Handle nil or empty args (stdin mode)
 	if len(args) == 0 {
 		return "", "", nil
@@ -163,7 +163,7 @@ func validateCommits(config *Config, commits []*object.Commit, refName string) e
 }
 
 // runArgsMode validates commits between base and head refs/SHAs.
-func runArgsMode(config *Config, repo *git.Repository, baseRef, headRef string) error {
+func runArgsMode(config *Config, repo *git.Repository, baseRef string, headRef string) error {
 	// Resolve base and head to commits
 	baseCommit, err := resolveRefOrSHA(repo, baseRef)
 	if err != nil {
@@ -231,7 +231,7 @@ func Run(stdin io.Reader, args []string) error {
 }
 
 // checkCommits validates all commits in the range against configured rules.
-func checkCommits(config *Config, repo *git.Repository, commitRange, ref string) error {
+func checkCommits(config *Config, repo *git.Repository, commitRange string, ref string) error {
 	// Parse the commit range
 	var commits []*object.Commit
 	var err error
@@ -257,7 +257,7 @@ func checkCommits(config *Config, repo *git.Repository, commitRange, ref string)
 }
 
 // getCommitsInRange returns all commits between oldCommit and newCommit (exclusive of oldCommit).
-func getCommitsInRange(repo *git.Repository, oldCommit, newCommit string) ([]*object.Commit, error) {
+func getCommitsInRange(repo *git.Repository, oldCommit string, newCommit string) ([]*object.Commit, error) {
 	// Get the new commit
 	newHash := plumbing.NewHash(newCommit)
 	newCommitObj, err := repo.CommitObject(newHash)

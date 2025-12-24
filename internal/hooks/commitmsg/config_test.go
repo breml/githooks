@@ -427,6 +427,6 @@ func TestValidateConfig_UnicodePattern(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
+func contains(s string, substr string) bool {
 	return regexp.MustCompile(regexp.QuoteMeta(substr)).MatchString(s)
 }
