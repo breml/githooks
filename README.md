@@ -56,6 +56,7 @@ rules:
 settings:
   fail_fast: false              # Report all violations (true = stop at first)
   skip_merge_commits: true      # Don't validate merge commits
+  main_ref: main                # Main branch reference for new branch validation (default: main)
   skip_authors:                 # Skip commits by specific authors (regex)
     - 'renovate\[bot\]'
     - 'dependabot\[bot\]'
@@ -125,6 +126,59 @@ Rules can check different parts of the commit message:
   scope: title
   pattern: '^fixup!'
   message: "Fixup commits should be squashed before pushing"
+```
+
+#### Usage in CI/CD (GitHub Actions)
+
+The `commit-msg-lint` tool can also be used in CI/CD pipelines to validate commit messages in pull requests:
+
+**Command-line flags:**
+
+- `--base-ref <ref>` - Base reference or SHA to compare from (`main_ref` from config is considered, defaults to `main`)
+- `--head-ref <ref>` - Head reference or SHA to compare to (required)
+
+Both flags accept branch names, tags, or direct SHA values.
+
+**GitHub Actions Example:**
+
+```yaml
+name: Validate Commits
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  commit-lint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Required to get full commit history
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
+
+      - name: Install commit-msg-lint
+        run: go install github.com/breml/githooks/cmd/commit-msg-lint@latest
+
+      - name: Validate commit messages
+        run: commit-msg-lint --base-ref origin/${{ github.base_ref }} --head-ref HEAD
+```
+
+**Standalone Usage:**
+
+```bash
+# Validate commits between two branches
+commit-msg-lint --base-ref main --head-ref feature-branch
+
+# Validate using default base (main)
+commit-msg-lint --head-ref HEAD
+
+# Validate using SHAs
+commit-msg-lint --base-ref abc123 --head-ref def456
 ```
 
 #### Testing

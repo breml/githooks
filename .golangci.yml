@@ -418,6 +418,11 @@ linters:
         # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#error-return
         - name: error-return
 
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-repeated-arg-type-style
+        - name: enforce-repeated-arg-type-style
+          arguments:
+            - "full"
+
     sloglint:
       # Enforce not using global loggers.
       # Values:
