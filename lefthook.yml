@@ -1,0 +1,22 @@
+---
+
+pre-commit:
+  parallel: true
+  jobs:
+    - group:
+        # Go linters and formatters
+        jobs:
+          - name: Run gofumpt
+            run: bin/gofumpt -l -w .
+          - name: Run newline-after-block linter
+            run: bin/newline-after-block -fix ./...
+          - name: Run golangci-lint
+            run: bin/golangci-lint run --fix ./...
+    - name: Lint markdown files
+      run: markdownlint-cli2 --fix --files '**/*.md'
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: Run tests
+      run: go test -v ./...
