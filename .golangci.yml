@@ -221,11 +221,6 @@ linters:
       # Default: false
       allow-empty-returns: true
 
-    forbidigo:
-      forbid:
-        # Built-in bootstrapping functions.
-        - pattern: ^print(ln)?$
-
     funlen:
       # Checks the number of lines in a function.
       # If lower than 0, disable the check.
@@ -416,6 +411,9 @@ linters:
 
         # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#use-any
         - name: use-any
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-fmt-print
+        - name: use-fmt-print
 
         # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#useless-break
         - name: useless-break
