@@ -23,23 +23,26 @@ Each hook follows a consistent pattern:
 
 1. The `cmd/<hook-name>/main.go` is a minimal entry point that:
    - Imports the implementation from `internal/hooks/<hook-name>/`
-   - Calls `Run()` with appropriate input (e.g., `os.Stdin` for pre-push hooks)
+   - Calls `Run()` with appropriate input (e.g., `os.Stdin` and `os.Args` for commit-msg-lint)
    - Handles errors and sets proper exit codes
 
 2. The `internal/hooks/<hook-name>/` package contains:
    - Core logic implementation
    - Unit tests
-   - Exported `Run()` function that accepts testable inputs (e.g., `io.Reader`)
-   - All helper functions are private (lowercase) - only `Run()` is exported
+   - Exported `Run()` function that accepts testable inputs (e.g., `io.Reader`, command-line args)
+   - All helper functions are private (lowercase) - only `Run()` and test helpers are exported
 
 This separation enables unit testing of hook logic without executing the actual binary. Tests should focus on testing
 the `Run()` function with various inputs rather than testing individual helper functions.
 
 ### Existing Hooks
 
-**commit-msg-lint** (pre-push hook):
+**commit-msg-lint** (pre-push hook and CLI tool):
 
-- Reads git pre-push hook input from stdin (ref format: `<local ref> <local sha1> <remote ref> <remote sha1>`)
+- **Dual-mode operation:**
+  - **Pre-push hook mode:** Reads git pre-push hook input from stdin
+    (ref format: `<local ref> <local sha1> <remote ref> <remote sha1>`)
+  - **CLI mode:** Accepts `--base-ref` and `--head-ref` flags to validate commits between refs/SHAs for CI/CD usage
 - Loads configuration from `.commit-msg-lint.yml` in repository root
 - Parses commit messages into three sections: title (first line), body (middle sections), and footer (last section after
   final empty line)
@@ -51,6 +54,10 @@ the `Run()` function with various inputs rather than testing individual helper f
 - Reports all rule violations for each failing commit (configurable via `fail_fast` setting)
 - Can skip merge commits and specific authors via configuration
 - Uses go-git library to interact with the git repository
+- CLI usage:
+  - `commit-msg-lint --base-ref main --head-ref feature` - Validate commits between branches
+  - `commit-msg-lint --head-ref HEAD` - Validate using default base (main)
+  - Both flags accept branch names, tags, or direct SHA values
 - Configuration example (`.commit-msg-lint.yml`):
 
   ```yaml

@@ -11,6 +11,7 @@ tasks:
       - go build -v -o bin/task github.com/go-task/task/v3/cmd/task
       - go build -v -o bin/golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint
       - go build -v -o bin/gofumpt mvdan.cc/gofumpt
+      - go build -v -o bin/commit-msg-lint github.com/breml/githooks/cmd/commit-msg-lint
 
   install-githooks:
     desc: "Install git hooks using lefthook"

@@ -68,3 +68,31 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+
+  commit-lint:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Required to get full commit history
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'oldstable'
+          cache: true
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build commit-msg-lint
+        run: go build -v -o bin/commit-msg-lint github.com/breml/githooks/cmd/commit-msg-lint
+
+      - name: Validate commit messages
+        run: bin/commit-msg-lint --base-ref origin/${{ github.base_ref }} --head-ref HEAD

@@ -104,6 +104,7 @@ func TestLoadConfig_Valid(t *testing.T) {
 settings:
   fail_fast: true
   skip_merge_commits: true
+  main_ref: master
   skip_authors:
     - 'renovate\[bot\]'
     - 'dependabot'
@@ -117,6 +118,10 @@ settings:
 
 				if !config.Settings.SkipMergeCommits {
 					t.Error("expected SkipMergeCommits to be true")
+				}
+
+				if config.Settings.MainRef != "master" {
+					t.Errorf("expected MainRef to be 'master', got %q", config.Settings.MainRef)
 				}
 
 				if len(config.Settings.SkipAuthors) != 2 {

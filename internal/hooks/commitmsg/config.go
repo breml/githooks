@@ -60,6 +60,7 @@ type Settings struct {
 	FailFast         bool     `yaml:"fail_fast,omitempty"`
 	SkipMergeCommits bool     `yaml:"skip_merge_commits,omitempty"`
 	SkipAuthors      []string `yaml:"skip_authors,omitempty"`
+	MainRef          string   `yaml:"main_ref,omitempty"`
 }
 
 // LoadConfig loads and validates configuration from the specified directory.

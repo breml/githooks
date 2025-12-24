@@ -2,6 +2,8 @@ package commitmsg
 
 import (
 	"bufio"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -15,22 +17,71 @@ const (
 	minRefFields     = 4
 	commitRangeParts = 2
 
-	gitZeroHash = "0000000000000000000000000000000000000000"
+	gitZeroHash    = "0000000000000000000000000000000000000000"
+	defaultMainRef = "main"
 )
 
-// Run reads git pre-push hook input from stdin and validates commit messages.
-func Run(stdin io.Reader) error {
-	// Load configuration from .commit-msg-lint.yml
-	config, err := LoadConfig(".")
+// parseArgs parses command-line arguments and returns base and head refs.
+// Returns empty strings if no flags are provided (stdin mode).
+func parseArgs(config *Config, args []string) (baseRef, headRef string, err error) {
+	// Handle nil or empty args (stdin mode)
+	if len(args) == 0 {
+		return "", "", nil
+	}
+
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // Don't print default error messages
+
+	var base, head string
+	fs.StringVar(&base, "base-ref", "", "Base ref or SHA to compare from")
+	fs.StringVar(&head, "head-ref", "", "Head ref or SHA to compare to")
+
+	err = fs.Parse(args[1:])
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return "", "", fmt.Errorf("failed to parse arguments: %w", err)
 	}
 
-	// Apply default for skip_merge_commits if not explicitly set
-	if !config.Settings.SkipMergeCommits {
-		config.Settings.SkipMergeCommits = true
+	// If no flags provided, return empty strings (stdin mode)
+	if base == "" && head == "" {
+		return "", "", nil
 	}
 
+	// If only head-ref is provided, default base-ref to "main"
+	if base == "" && head != "" {
+		base = config.Settings.MainRef
+	}
+
+	// If only base-ref is provided, error (need head-ref)
+	if base != "" && head == "" {
+		return "", "", errors.New("--head-ref is required when using --base-ref")
+	}
+
+	return base, head, nil
+}
+
+// resolveRefOrSHA resolves a ref name or SHA to a commit object.
+// Tries as ref first (branches, tags, HEAD), then as SHA.
+func resolveRefOrSHA(repo *git.Repository, refOrSHA string) (*object.Commit, error) {
+	// Try as ref name first (handles branches, remotes, tags, HEAD, HEAD^, etc.)
+	hash, err := repo.ResolveRevision(plumbing.Revision(refOrSHA))
+	if err == nil {
+		commit, err := repo.CommitObject(*hash)
+		if err == nil {
+			return commit, nil
+		}
+	}
+
+	// Try as direct SHA
+	commit, err := repo.CommitObject(plumbing.NewHash(refOrSHA))
+	if err == nil {
+		return commit, nil
+	}
+
+	return nil, fmt.Errorf("failed to resolve '%s' as ref or SHA", refOrSHA)
+}
+
+// runStdinMode reads git pre-push hook input from stdin and validates commits.
+func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 	// Read from stdin - git pre-push hook provides refs via stdin
 	scanner := bufio.NewScanner(stdin)
 
@@ -57,21 +108,26 @@ func Run(stdin io.Reader) error {
 		// Determine the range of commits to check
 		var commitRange string
 		if remoteOID == gitZeroHash {
-			// New branch, examine all commits
-			commitRange = localOID
-		} else {
-			// Update to existing branch, examine new commits
-			commitRange = fmt.Sprintf("%s..%s", remoteOID, localOID)
+			// New branch, examine all commits since main branch
+			mainRef, err := resolveRefOrSHA(repo, config.Settings.MainRef)
+			if err != nil {
+				return fmt.Errorf("failed to resolve main ref: %w", err)
+			}
+
+			remoteOID = mainRef.Hash.String()
 		}
 
+		// Update to existing branch, examine new commits
+		commitRange = fmt.Sprintf("%s..%s", remoteOID, localOID)
+
 		// Check commits in the range
-		checkErr := checkCommits(config, commitRange, localRef)
+		checkErr := checkCommits(config, repo, commitRange, localRef)
 		if checkErr != nil {
 			return checkErr
 		}
 	}
 
-	err = scanner.Err()
+	err := scanner.Err()
 	if err != nil {
 		return fmt.Errorf("error reading stdin: %w", err)
 	}
@@ -79,33 +135,8 @@ func Run(stdin io.Reader) error {
 	return nil
 }
 
-// checkCommits validates all commits in the range against configured rules.
-func checkCommits(config *Config, commitRange, ref string) error {
-	repo, err := git.PlainOpen(".")
-	if err != nil {
-		return fmt.Errorf("failed to open git repository: %w", err)
-	}
-
-	// Parse the commit range
-	var commits []*object.Commit
-	if strings.Contains(commitRange, "..") {
-		// Range format: "oldCommit..newCommit"
-		parts := strings.Split(commitRange, "..")
-		if len(parts) != commitRangeParts {
-			return fmt.Errorf("invalid commit range format: %s", commitRange)
-		}
-
-		commits, err = getCommitsInRange(repo, parts[0], parts[1])
-	} else {
-		// Single commit format: get all commits up to this one
-		commits, err = getCommitsUpTo(repo, commitRange)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to get commits: %w", err)
-	}
-
-	// Validate each commit
+// validateCommits validates a list of commits against configured rules.
+func validateCommits(config *Config, commits []*object.Commit, refName string) error {
 	for _, commit := range commits {
 		// Skip merge commits if configured
 		if config.Settings.SkipMergeCommits && len(commit.ParentHashes) > 1 {
@@ -124,11 +155,105 @@ func checkCommits(config *Config, commitRange, ref string) error {
 		violations := EvaluateRules(config.Rules, parsed)
 
 		if len(violations) > 0 {
-			return formatViolationError(commit, ref, violations, config.Settings.FailFast)
+			return formatViolationError(commit, refName, violations, config.Settings.FailFast)
 		}
 	}
 
 	return nil
+}
+
+// runArgsMode validates commits between base and head refs/SHAs.
+func runArgsMode(config *Config, repo *git.Repository, baseRef, headRef string) error {
+	// Resolve base and head to commits
+	baseCommit, err := resolveRefOrSHA(repo, baseRef)
+	if err != nil {
+		if baseRef == config.Settings.MainRef {
+			return fmt.Errorf("%w (hint: use --base-ref to specify a different base)", err)
+		}
+
+		return err
+	}
+
+	headCommit, err := resolveRefOrSHA(repo, headRef)
+	if err != nil {
+		return err
+	}
+
+	// Get commits in range base..head
+	commits, err := getCommitsInRange(repo, baseCommit.Hash.String(), headCommit.Hash.String())
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+
+	// Validate commits
+	refName := fmt.Sprintf("%s..%s", baseRef, headRef)
+	return validateCommits(config, commits, refName)
+}
+
+// Run reads git pre-push hook input from stdin and validates commit messages.
+// If args contains CLI flags, it validates the specified commit range instead.
+func Run(stdin io.Reader, args []string) error {
+	// Load configuration from .commit-msg-lint.yml
+	config, err := LoadConfig(".")
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Apply default for main_ref if not explicitly set
+	if config.Settings.MainRef == "" {
+		config.Settings.MainRef = defaultMainRef
+	}
+
+	// Parse command-line arguments
+	baseRef, headRef, err := parseArgs(config, args)
+	if err != nil {
+		return err
+	}
+
+	// Apply default for skip_merge_commits if not explicitly set
+	if !config.Settings.SkipMergeCommits {
+		config.Settings.SkipMergeCommits = true
+	}
+
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return fmt.Errorf("failed to open git repository: %w", err)
+	}
+
+	// Dispatch based on input mode
+	if headRef != "" {
+		// CLI mode: validate between base and head refs
+		return runArgsMode(config, repo, baseRef, headRef)
+	}
+
+	// Stdin mode: read from stdin (pre-push hook)
+	return runStdinMode(config, repo, stdin)
+}
+
+// checkCommits validates all commits in the range against configured rules.
+func checkCommits(config *Config, repo *git.Repository, commitRange, ref string) error {
+	// Parse the commit range
+	var commits []*object.Commit
+	var err error
+	if strings.Contains(commitRange, "..") {
+		// Range format: "oldCommit..newCommit"
+		parts := strings.Split(commitRange, "..")
+		if len(parts) != commitRangeParts {
+			return fmt.Errorf("invalid commit range format: %s", commitRange)
+		}
+
+		commits, err = getCommitsInRange(repo, parts[0], parts[1])
+	} else {
+		// Single commit format: get all commits up to this one
+		commits, err = getCommitsUpTo(repo, commitRange)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+
+	// Validate commits
+	return validateCommits(config, commits, ref)
 }
 
 // getCommitsInRange returns all commits between oldCommit and newCommit (exclusive of oldCommit).
