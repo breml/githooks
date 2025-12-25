@@ -48,7 +48,6 @@ linters:
     - bidichk # checks for dangerous unicode character sequences
     - bodyclose # checks whether HTTP response body is closed successfully
     - copyloopvar # detects places where loop variables are copied (Go 1.22+)
-    - cyclop # checks function and package cyclomatic complexity
     - decorder # checks declaration order and count of types, constants, variables and functions
     - depguard # checks if package imports are in a list of acceptable packages
     - dupl # tool for code clone detection
@@ -64,15 +63,11 @@ linters:
     - fatcontext # detects nested contexts in loops
     - forbidigo # forbids identifiers
     - funcorder # checks the order of functions, methods, and constructors
-    - funlen # tool for detection of long functions
     - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
     - gochecknoglobals # checks that no global variables exist
     - gochecknoinits # checks that no init functions are present in Go code
     - gochecksumtype # checks exhaustiveness on Go "sum types"
-    - gocognit # computes and checks the cognitive complexity of functions
-    - goconst # finds repeated strings that could be replaced by a constant
     - gocritic # provides diagnostics that check for bugs, performance and style issues
-    - gocyclo # computes and checks the cyclomatic complexity of functions
     - godoclint # checks Golang's documentation practice
     - godot # checks if comments end in a period
     - godox # detects usage of FIXME, TODO and other keywords inside comments
@@ -91,7 +86,6 @@ linters:
     - modernize # suggests simplifications to Go code, using modern language and library features
     - musttag # enforces field tags in (un)marshaled structs
     - nakedret # finds naked returns in functions greater than a specified function length
-    - nestif # reports deeply nested if statements
     - nilerr # finds the code that returns nil even if it checks that the error is not nil
     - nilnesserr # reports that it checks for err != nil, but it returns a different nil value error (powered by nilness and nilerr)
     - nilnil # checks that there is no simultaneous return of nil error and an invalid value
@@ -126,15 +120,6 @@ linters:
 
   # All settings can be found here https://github.com/golangci/golangci-lint/blob/HEAD/.golangci.reference.yml
   settings:
-    cyclop:
-      # The maximal code complexity to report.
-      # Default: 10
-      max-complexity: 30
-      # The maximal average package complexity.
-      # If it's higher than 0.0 (float) the check is enabled.
-      # Default: 0.0
-      package-average: 10.0
-
     depguard:
       # Rules to apply.
       #
@@ -221,30 +206,10 @@ linters:
       # Default: false
       allow-empty-returns: true
 
-    forbidigo:
-      forbid:
-        # Built-in bootstrapping functions.
-        - pattern: ^print(ln)?$
-
-    funlen:
-      # Checks the number of lines in a function.
-      # If lower than 0, disable the check.
-      # Default: 60
-      lines: 100
-      # Checks the number of statements in a function.
-      # If lower than 0, disable the check.
-      # Default: 40
-      statements: 50
-
     gochecksumtype:
       # Presence of `default` case in switch statements satisfies exhaustiveness, if all members are not listed.
       # Default: true
       default-signifies-exhaustive: false
-
-    gocognit:
-      # Minimal code complexity to report.
-      # Default: 30 (but we recommend 10-20)
-      min-complexity: 20
 
     gocritic:
       # Settings passed to gocritic.
@@ -315,7 +280,7 @@ linters:
     nolintlint:
       # Exclude following linters from requiring an explanation.
       # Default: []
-      allow-no-explanation: [ funlen, gocognit, golines ]
+      allow-no-explanation: [ golines ]
       # Enable to require an explanation of nonzero length after each nolint directive.
       # Default: false
       require-explanation: true
@@ -336,92 +301,381 @@ linters:
         - ".*"
 
     revive:
+      enable-all-rules: true
       rules:
-        # Disabled for now while we are rushing with the development of an initial version.
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#exported
-        - name: exported
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#add-constant
+        - name: add-constant
           arguments:
-            - "checkPrivateReceivers"
+            - maxLitCount: "3"
+              allowStrs: '"","\n"'
+              allowInts: "0,1,2"
+              allowFloats: "0.0,0.,1.0,1.,2.0,2."
+              ignoreFuncs: "os\\.*,fmt\\.Println,make"
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#import-shadowing
-        - name: import-shadowing
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#argument-limit
+        - name: argument-limit
+          arguments:
+            # Maximal number of allowed function arguments.
+            - 6
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#unchecked-type-assertion
-        - name: unchecked-type-assertion
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#atomic
+        - name: atomic
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#early-return
-        - name: early-return
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#banned-characters
+        - name: banned-characters
+          disabled: true
+          # arguments:
+          #   # List of characters that should not be used in identifiers.
+          #   - "_" # Example: banning underscores in names.
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#redundant-import-alias
-        - name: redundant-import-alias
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#redefines-builtin-id
-        - name: redefines-builtin-id
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#struct-tag
-        - name: struct-tag
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#receiver-naming
-        - name: receiver-naming
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#deep-exit
-        - name: deep-exit
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#defer
-        - name: defer
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#bool-literal-in-expr
-        - name: bool-literal-in-expr
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#comment-spacings
-        - name: comment-spacings
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#use-any
-        - name: use-any
-
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#bare-return
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#bare-return
         - name: bare-return
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#empty-block
-        - name: empty-block
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#blank-imports
+        - name: blank-imports
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#range-val-address
-        - name: range-val-address
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#bool-literal-in-expr
+        - name: bool-literal-in-expr
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#range-val-in-closure
-        - name: range-val-in-closure
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#call-to-gc
+        - name: call-to-gc
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#var-declaration
-        - name: var-declaration
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#cognitive-complexity
+        - name: cognitive-complexity
+          arguments:
+            # Minimal code complexity to report, recommend 10-20
+            - 20
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#useless-break
-        - name: useless-break
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#comment-spacings
+        - name: comment-spacings
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#error-naming
-        - name: error-naming
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#comments-density
+        - name: comments-density
+          arguments:
+            # Minimal percentage of comment lines in a function to report.
+            - 15
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#indent-error-flow
-        - name: indent-error-flow
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#confusing-naming
+        - name: confusing-naming
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#datarace
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#confusing-results
+        - name: confusing-results
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#constant-logical-expr
+        - name: constant-logical-expr
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#context-as-argument
+        - name: context-as-argument
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#context-keys-type
+        - name: context-keys-type
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#cyclomatic
+        - name: cyclomatic
+          arguments:
+            # Maximal code complexity to report
+            - 30
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#datarace
         - name: datarace
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#modifies-value-receiver
-        - name: modifies-value-receiver
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#deep-exit
+        - name: deep-exit
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#empty-lines
-        - name: empty-lines
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#defer
+        - name: defer
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#duplicated-imports
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#dot-imports
+        - name: dot-imports
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#duplicated-imports
         - name: duplicated-imports
 
-        # https://github.com/mgechev/revive/blob/2a1701aadbedfcc175cb92836a51407bec382652/RULES_DESCRIPTIONS.md#error-return
-        - name: error-return
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#early-return
+        - name: early-return
 
-        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-repeated-arg-type-style
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#empty-block
+        - name: empty-block
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#empty-lines
+        - name: empty-lines
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#epoch-naming
+        # - name: epoch-naming
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-map-style
+        - name: enforce-map-style
+          arguments:
+            - "literal"
+
+        # # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-repeated-arg-type-style
         - name: enforce-repeated-arg-type-style
           arguments:
             - "full"
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-slice-style
+        - name: enforce-slice-style
+          arguments:
+            - "literal"
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#enforce-switch-style
+        - name: enforce-switch-style
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#error-naming
+        - name: error-naming
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#error-return
+        - name: error-return
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#error-strings
+        - name: error-strings
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#errorf
+        - name: errorf
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#exported
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "sayRepetitiveInsteadOfStutters"
+            - "checkPublicInterface"
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#file-header
+        - name: file-header
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#file-length-limit
+        - name: file-length-limit
+          arguments:
+            - max: 1000
+              skip-comments: true
+              skip-blank-lines: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#filename-format
+        - name: filename-format
+          arguments:
+            - "^[a-z][_a-z0-9]*\\.go$"
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#flag-parameter
+        - name: flag-parameter
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#forbidden-call-in-wg-go
+        - name: forbidden-call-in-wg-go
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#function-length
+        - name: function-length
+          arguments:
+            # maxStatements
+            - 50
+            # maxLines
+            - 100
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#function-result-limit
+        - name: function-result-limit
+          arguments:
+            - 3
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#get-return
+        - name: get-return
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#identical-branches
+        - name: identical-branches
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#identical-ifelseif-branches
+        - name: identical-ifelseif-branches
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#identical-ifelseif-conditions
+        - name: identical-ifelseif-conditions
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#identical-switch-branches
+        - name: identical-switch-branches
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#identical-switch-conditions
+        - name: identical-switch-conditions
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#if-return
+        - name: if-return
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#import-alias-naming
+        - name: import-alias-naming
+          arguments:
+            - allow-regex: "^[a-z][a-z0-9]{0,}$"
+              deny-regex: '^v\d+$'
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#import-shadowing
+        - name: import-shadowing
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#imports-blocklist
+        - name: imports-blocklist
+          disabled: true # use depguard instead
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#increment-decrement
+        - name: increment-decrement
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#indent-error-flow
+        - name: indent-error-flow
+          arguments: []
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#inefficient-map-lookup
+        - name: inefficient-map-lookup
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#line-length-limit
+        - name: line-length-limit
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#max-control-nesting
+        - name: max-control-nesting
+          severity: warning
+          disabled: false
+          exclude: [""]
+          arguments: [5]
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#max-public-structs
+        - name: max-public-structs
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#modifies-parameter
+        - name: modifies-parameter
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#modifies-value-receiver
+        - name: modifies-value-receiver
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#nested-structs
+        - name: nested-structs
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#optimize-operands-order
+        - name: optimize-operands-order
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#package-comments
+        - name: package-comments
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#package-directory-mismatch
+        - name: package-directory-mismatch
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#range
+        - name: range
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#range-val-address
+        - name: range-val-address
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#range-val-in-closure
+        - name: range-val-in-closure
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#receiver-naming
+        - name: receiver-naming
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#redefines-builtin-id
+        - name: redefines-builtin-id
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#redundant-build-tag
+        - name: redundant-build-tag
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#redundant-import-alias
+        - name: redundant-import-alias
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#redundant-test-main-exit
+        - name: redundant-test-main-exit
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#string-format
+        - name: string-format
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#string-of-int
+        - name: string-of-int
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#struct-tag
+        - name: struct-tag
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#superfluous-else
+        - name: superfluous-else
+          arguments: []
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#time-date
+        - name: time-date
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#time-equal
+        - name: time-equal
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#time-naming
+        - name: time-naming
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unchecked-type-assertion
+        - name: unchecked-type-assertion
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unconditional-recursion
+        - name: unconditional-recursion
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unexported-naming
+        - name: unexported-naming
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unexported-return
+        - name: unexported-return
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unhandled-error
+        - name: unhandled-error
+          arguments:
+            # List of regular expressions to match function patterns whose returned errors should be ignored.
+            - '^fmt\.Print'
+            - '^(bytes\.Buffer|string\.Writer)\.Write(Byte|Rune|String)?$'
+            - '^strings\.Builder\.Write(Byte|Rune|String)?$'
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unnecessary-format
+        - name: unnecessary-format
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unnecessary-if
+        - name: unnecessary-if
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unnecessary-stmt
+        - name: unnecessary-stmt
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unreachable-code
+        - name: unreachable-code
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unsecure-url-scheme
+        - name: unsecure-url-scheme
+          disabled: true
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unused-parameter
+        - name: unused-parameter
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unused-receiver
+        - name: unused-receiver
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-any
+        - name: use-any
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-errors-new
+        - name: use-errors-new
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-fmt-print
+        - name: use-fmt-print
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#use-waitgroup-go
+        - name: use-waitgroup-go
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#useless-break
+        - name: useless-break
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#useless-fallthrough
+        - name: useless-fallthrough
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#var-declaration
+        - name: var-declaration
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#var-naming
+        - name: var-naming
+          arguments:
+            - [] # AllowList
+            - [] # DenyList
+            - - skip-initialism-name-checks: false
+                upper-case-const: false
+                skip-package-name-checks: false
+                skip-package-name-collision-with-go-std: false
+                extra-bad-package-names: []
+
+        # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#waitgroup-by-value
+        - name: waitgroup-by-value
 
     sloglint:
       # Enforce not using global loggers.
@@ -536,15 +790,17 @@ linters:
     rules:
       - path: '_test\.go'
         linters:
-          - gocognit
           - dupl
           - exhaustruct
-          - funlen
-          - goconst
           - gosec
           - noctx
           - wrapcheck
           - varnamelen
+
+      - path: '_test\.go'
+        linters:
+          - revive
+        text: '(add-constant|cognitive-complexity|comments-density|cyclomatic|function-length):'
 
       - text: 'shadow: declaration of "(err|ctx)" shadows declaration at'
         linters: [ govet ]

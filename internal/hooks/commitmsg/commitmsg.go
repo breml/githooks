@@ -85,6 +85,12 @@ func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 	// Read from stdin - git pre-push hook provides refs via stdin
 	scanner := bufio.NewScanner(stdin)
 
+	const (
+		stdinPosLocalRef  = 0
+		stdinPosLocalOID  = 1
+		stdinPosRemoteOID = 3
+	)
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -96,9 +102,9 @@ func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 			continue
 		}
 
-		localRef := fields[0]
-		localOID := fields[1]
-		remoteOID := fields[3]
+		localRef := fields[stdinPosLocalRef]
+		localOID := fields[stdinPosLocalOID]
+		remoteOID := fields[stdinPosRemoteOID]
 
 		// Handle delete
 		if localOID == gitZeroHash {
@@ -155,7 +161,13 @@ func validateCommits(config *Config, commits []*object.Commit, refName string) e
 		violations := EvaluateRules(config.Rules, parsed)
 
 		if len(violations) > 0 {
-			return formatViolationError(commit, refName, violations, config.Settings.FailFast)
+			// In fail-fast mode, only show the first violation
+			violationsToShow := violations
+			if config.Settings.FailFast {
+				violationsToShow = violations[:1]
+			}
+
+			return formatViolationError(commit, refName, violationsToShow)
 		}
 	}
 
@@ -273,7 +285,7 @@ func getCommitsInRange(repo *git.Repository, oldCommit string, newCommit string)
 	}
 
 	// Create a set of old commits to exclude
-	oldCommits := make(map[plumbing.Hash]bool)
+	oldCommits := map[plumbing.Hash]bool{}
 	oldIter := object.NewCommitIterCTime(oldCommitObj, nil, nil)
 	err = oldIter.ForEach(func(c *object.Commit) error {
 		oldCommits[c.Hash] = true

@@ -15,13 +15,15 @@ import (
 	"github.com/breml/githooks/internal/hooks/commitmsg"
 )
 
+type commit struct {
+	message string
+	files   map[string]string
+}
+
 // Helper function to create a test repository with commits.
 func createTestRepo(
 	t *testing.T,
-	commits []struct {
-		message string
-		files   map[string]string
-	},
+	commits []commit,
 ) (string, *git.Repository, []plumbing.Hash) {
 	t.Helper()
 
@@ -131,12 +133,9 @@ const defaultWIPConfig = `rules:
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  string
-		commits []struct {
-			message string
-			files   map[string]string
-		}
+		name        string
+		config      string
+		commits     []commit
 		input       func([]plumbing.Hash) string
 		wantErr     bool
 		description string
@@ -186,10 +185,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "new branch without WIP commits",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -212,10 +208,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "new branch with WIP commit",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -238,10 +231,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "branch update without WIP commits",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -268,10 +258,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "branch update with WIP commit",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -298,10 +285,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "multiple refs in single push - all clean",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -331,10 +315,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "multiple refs - one has WIP",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -364,10 +345,7 @@ func TestRun(t *testing.T) {
 		{
 			name:   "range with WIP in middle",
 			config: defaultWIPConfig,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Initial commit",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -399,10 +377,7 @@ func TestRun(t *testing.T) {
     scope: footer
     pattern: '^Signed-off-by:'
 `,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "Add feature",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -426,10 +401,7 @@ func TestRun(t *testing.T) {
     scope: title
     pattern: '^fixup!'
 `,
-			commits: []struct {
-				message string
-				files   map[string]string
-			}{
+			commits: []commit{
 				{
 					message: "fixup! Fix typo",
 					files:   map[string]string{"file1.txt": "content1"},
@@ -533,7 +505,7 @@ func TestParseArgs(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Use the private parseArgs function through exported test helper function.
-			base, head, err := commitmsg.ParseArgs(&commitmsg.Config{
+			base, head, err := commitmsg.ParseArgsForTesting(&commitmsg.Config{
 				Settings: commitmsg.Settings{
 					MainRef: "main",
 				},
@@ -557,10 +529,7 @@ func TestParseArgs(t *testing.T) {
 
 func TestResolveRefOrSHA(t *testing.T) {
 	// Create a test repository with branches
-	commits := []struct {
-		message string
-		files   map[string]string
-	}{
+	commits := []commit{
 		{
 			message: "Initial commit",
 			files:   map[string]string{"file1.txt": "content1"},
@@ -620,7 +589,7 @@ func TestResolveRefOrSHA(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Use the private resolveRefOrSHA function through exported test helper function.
-			commit, err := commitmsg.ResolveRefOrSHA(repo, testCase.refOrSHA)
+			commit, err := commitmsg.ResolveRefOrSHAForTesting(repo, testCase.refOrSHA)
 
 			if (err != nil) != testCase.wantErr {
 				t.Errorf("resolveRefOrSHA() error = %v, wantErr %v", err, testCase.wantErr)
@@ -636,10 +605,7 @@ func TestResolveRefOrSHA(t *testing.T) {
 
 func TestRunWithArgs(t *testing.T) {
 	// Create a test repository with clean and WIP commits
-	commits := []struct {
-		message string
-		files   map[string]string
-	}{
+	commits := []commit{
 		{
 			message: "Initial commit",
 			files:   map[string]string{"file1.txt": "content1"},

@@ -8,7 +8,7 @@ import (
 )
 
 // formatViolationError creates a detailed error message for rule violations.
-func formatViolationError(commit *object.Commit, ref string, violations []RuleViolation, failFast bool) error {
+func formatViolationError(commit *object.Commit, ref string, violations []RuleViolation) error {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Commit %s in %s failed validation:\n", commit.Hash.String()[:7], ref))
@@ -23,15 +23,12 @@ func formatViolationError(commit *object.Commit, ref string, violations []RuleVi
 		} else {
 			sb.WriteString(fmt.Sprintf("     Pattern %q was not found in %s (require rule)\n", v.Rule.Pattern, v.Rule.Scope))
 		}
-
-		if failFast && i == 0 {
-			break // Only show first violation in fail-fast mode
-		}
 	}
 
 	return fmt.Errorf("%s", sb.String())
 }
 
+// getViolationMessage returns a custom message or generates a default based on rule type.
 func getViolationMessage(v RuleViolation) string {
 	if v.Rule.Message != "" {
 		return v.Rule.Message
@@ -45,6 +42,7 @@ func getViolationMessage(v RuleViolation) string {
 	return fmt.Sprintf("Pattern must match in %s", v.Rule.Scope)
 }
 
+// getFirstLine extracts and returns the first line of a commit message.
 func getFirstLine(message string) string {
 	lines := strings.Split(message, "\n")
 	if len(lines) > 0 {

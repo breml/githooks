@@ -1,3 +1,4 @@
+// Package main provides the commit-msg-lint CLI tool for validating commit messages.
 package main
 
 import (
@@ -10,7 +11,7 @@ import (
 func main() {
 	err := app.Run(os.Stdin, os.Args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }

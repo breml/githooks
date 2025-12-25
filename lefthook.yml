@@ -3,6 +3,8 @@
 pre-commit:
   parallel: true
   jobs:
+    - name: golangci-lint config verify
+      run: bin/golangci-lint config verify
     - group:
         # Go linters and formatters
         jobs:

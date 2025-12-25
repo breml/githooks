@@ -263,7 +263,7 @@ func runLoadConfigTest(t *testing.T, tt struct {
 
 	if tt.wantErr {
 		if err == nil {
-			t.Errorf("expected error, got nil")
+			t.Error("expected error, got nil")
 			return
 		}
 

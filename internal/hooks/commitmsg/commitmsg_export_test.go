@@ -7,12 +7,12 @@ import (
 
 // Test helpers - exported for testing only
 
-// ParseArgs exposes parseArgs for testing.
-func ParseArgs(config *Config, args []string) (string, string, error) {
+// ParseArgsForTesting exposes parseArgs for testing.
+func ParseArgsForTesting(config *Config, args []string) (baseRef string, headRef string, err error) {
 	return parseArgs(config, args)
 }
 
-// ResolveRefOrSHA exposes resolveRefOrSHA for testing.
-func ResolveRefOrSHA(repo *git.Repository, refOrSHA string) (*object.Commit, error) {
+// ResolveRefOrSHAForTesting exposes resolveRefOrSHA for testing.
+func ResolveRefOrSHAForTesting(repo *git.Repository, refOrSHA string) (*object.Commit, error) {
 	return resolveRefOrSHA(repo, refOrSHA)
 }
