@@ -222,7 +222,7 @@ func TestEvaluateRules(t *testing.T) {
 			wantViolations: 2, // Both rules fail
 			checkViolation: func(t *testing.T, violations []commitmsg.RuleViolation) {
 				t.Helper()
-				ruleNames := make(map[string]bool)
+				ruleNames := make(map[string]bool, len(violations))
 				for _, v := range violations {
 					ruleNames[v.Rule.Name] = true
 				}

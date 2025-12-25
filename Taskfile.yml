@@ -29,6 +29,7 @@ tasks:
     desc: "Run linters"
     cmds:
       - markdownlint-cli2 --fix --files '**/*.md'
+      - bin/golangci-lint config verify
       - bin/golangci-lint run --fix ./...
 
   test:
