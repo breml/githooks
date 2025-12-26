@@ -219,8 +219,8 @@ linters:
         - performance
         - style
       disabled-checks:
-        # These 3 will detect many cases, but they do sense
-        # if it's performance oriented code
+        # These 4 will detect many cases, but they make sense
+        # only if it's performance-oriented code
         - hugeParam
         - paramTypeCombine
         - rangeExprCopy
