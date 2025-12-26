@@ -212,6 +212,20 @@ linters:
       default-signifies-exhaustive: false
 
     gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        # These 3 will detect many cases, but they do sense
+        # if it's performance oriented code
+        - hugeParam
+        - paramTypeCombine
+        - rangeExprCopy
+        - rangeValCopy
+
       # Settings passed to gocritic.
       # The settings key is the name of a supported gocritic checker.
       # The list of supported checkers can be found at https://go-critic.com/overview.
