@@ -21,7 +21,9 @@ func formatViolationError(commit *object.Commit, ref string, violations []RuleVi
 		if v.Rule.Type == RuleTypeDeny {
 			sb.WriteString(fmt.Sprintf("     Pattern %q was found in %s (deny rule)\n", v.Rule.Pattern, v.Rule.Scope))
 		} else {
-			sb.WriteString(fmt.Sprintf("     Pattern %q was not found in %s (require rule)\n", v.Rule.Pattern, v.Rule.Scope))
+			sb.WriteString(
+				fmt.Sprintf("     Pattern %q was not found in %s (require rule)\n", v.Rule.Pattern, v.Rule.Scope),
+			)
 		}
 	}
 
