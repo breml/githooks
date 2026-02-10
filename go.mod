@@ -3,7 +3,7 @@ module github.com/breml/githooks
 go 1.25.2
 
 require (
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	gopkg.in/yaml.v3 v3.0.1
 )
 
