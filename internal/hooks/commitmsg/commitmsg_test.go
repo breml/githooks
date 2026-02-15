@@ -682,3 +682,117 @@ func TestRunWithArgs(t *testing.T) {
 		})
 	}
 }
+
+// TestRebaseForcesPush tests that after a rebase + force push, commits from
+// the base branch are not incorrectly validated. When remoteOID points to a
+// pre-rebase commit that is no longer an ancestor of the local head, the code
+// should fall back to the configured main ref.
+func TestRebaseForcePush(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	repo, err := git.PlainInit(tmpDir, false)
+	if err != nil {
+		t.Fatalf("failed to init repo: %v", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("failed to get worktree: %v", err)
+	}
+
+	commitFile := func(filename, content, message string, when time.Time) plumbing.Hash {
+		t.Helper()
+
+		filePath := filepath.Join(tmpDir, filename)
+		writeErr := os.WriteFile(filePath, []byte(content), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write file: %v", writeErr)
+		}
+
+		_, addErr := worktree.Add(filename)
+		if addErr != nil {
+			t.Fatalf("failed to add file: %v", addErr)
+		}
+
+		hash, commitErr := worktree.Commit(message, &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "Test User",
+				Email: "test@example.com",
+				When:  when,
+			},
+		})
+		if commitErr != nil {
+			t.Fatalf("failed to commit: %v", commitErr)
+		}
+
+		return hash
+	}
+
+	now := time.Now()
+
+	// Build the following history:
+	//
+	// base -- mainCommit (main, title >72 chars)
+	//     \               \
+	//      oldFeature      newFeature (rebased)
+	//
+	// oldFeature simulates the pre-rebase commit that the remote still has.
+	// newFeature simulates the rebased feature commit on top of mainCommit.
+
+	// 1. Base commit (common ancestor)
+	baseHash := commitFile(".gitkeep", "", "chore: initial repository setup", now)
+
+	// 2. Commit on main with a title longer than 72 characters
+	longTitle := "chore: this is an intentionally long commit title that exceeds the seventy-two character limit"
+	mainHash := commitFile("main.txt", "main content", longTitle, now.Add(1*time.Minute))
+
+	// Point main branch at mainHash
+	mainRef := plumbing.NewHashReference("refs/heads/main", mainHash)
+	err = repo.Storer.SetReference(mainRef)
+	if err != nil {
+		t.Fatalf("failed to set main ref: %v", err)
+	}
+
+	// 3. Create old feature commit branching from base (pre-rebase state)
+	//    Reset HEAD to base first, then create the commit
+	err = worktree.Reset(&git.ResetOptions{Commit: baseHash, Mode: git.HardReset})
+	if err != nil {
+		t.Fatalf("failed to reset to base: %v", err)
+	}
+
+	oldFeatureHash := commitFile("feature.txt", "old feature", "feat: add feature", now.Add(2*time.Minute))
+
+	// 4. Create new feature commit on top of mainCommit (post-rebase state)
+	err = worktree.Reset(&git.ResetOptions{Commit: mainHash, Mode: git.HardReset})
+	if err != nil {
+		t.Fatalf("failed to reset to main: %v", err)
+	}
+
+	newFeatureHash := commitFile("feature.txt", "new feature", "feat: add feature", now.Add(3*time.Minute))
+
+	// Write config with title-max-length rule
+	writeConfigFile(t, tmpDir, `rules:
+  - name: title-max-length
+    type: deny
+    scope: title
+    pattern: '^.{73,}'
+    message: "Commit title must not exceed 72 characters"
+`)
+
+	t.Chdir(tmpDir)
+
+	// Simulate force push: remoteOID is the old (pre-rebase) feature commit,
+	// localOID is the new (post-rebase) feature commit.
+	// Without the fix, mainCommit (long title) would be included in the range
+	// and cause a false violation.
+	input := fmt.Sprintf(
+		"refs/heads/feature %s refs/heads/feature %s\n",
+		newFeatureHash.String(),
+		oldFeatureHash.String(),
+	)
+
+	err = commitmsg.Run(strings.NewReader(input), nil)
+	if err != nil {
+		t.Errorf("Run() returned unexpected error (base branch commit should not be validated): %v", err)
+	}
+}

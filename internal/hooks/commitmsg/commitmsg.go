@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 const (
@@ -80,6 +81,38 @@ func resolveRefOrSHA(repo *git.Repository, refOrSHA string) (*object.Commit, err
 	return nil, fmt.Errorf("failed to resolve '%s' as ref or SHA", refOrSHA)
 }
 
+// resolveBaseOID determines the base commit OID for computing the commit range.
+// For new branches (remoteOID is zero hash), it falls back to the configured main ref.
+// For existing branches, it checks whether remoteOID is an ancestor of localOID.
+// If not (e.g. after a rebase + force push), it falls back to the configured main ref.
+func resolveBaseOID(config *Config, repo *git.Repository, remoteOID string, localOID string) (string, error) {
+	if remoteOID == gitZeroHash {
+		// New branch, examine all commits since main branch
+		mainRef, err := resolveRefOrSHA(repo, config.Settings.MainRef)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve main ref: %w", err)
+		}
+
+		return mainRef.Hash.String(), nil
+	}
+
+	// Check if remoteOID is an ancestor of localOID.
+	// If not (e.g. after a rebase + force push), the remote ref
+	// is no longer in the local commit graph and cannot be used
+	// as the base. Fall back to the configured main ref.
+	ancestor, err := isAncestorOf(repo, remoteOID, localOID)
+	if err != nil || !ancestor {
+		mainRef, resolveErr := resolveRefOrSHA(repo, config.Settings.MainRef)
+		if resolveErr != nil {
+			return "", fmt.Errorf("failed to resolve main ref: %w", resolveErr)
+		}
+
+		return mainRef.Hash.String(), nil
+	}
+
+	return remoteOID, nil
+}
+
 // runStdinMode reads git pre-push hook input from stdin and validates commits.
 func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 	// Read from stdin - git pre-push hook provides refs via stdin
@@ -111,20 +144,13 @@ func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 			continue
 		}
 
-		// Determine the range of commits to check
-		var commitRange string
-		if remoteOID == gitZeroHash {
-			// New branch, examine all commits since main branch
-			mainRef, err := resolveRefOrSHA(repo, config.Settings.MainRef)
-			if err != nil {
-				return fmt.Errorf("failed to resolve main ref: %w", err)
-			}
-
-			remoteOID = mainRef.Hash.String()
+		// Determine the base commit for the range
+		baseOID, err := resolveBaseOID(config, repo, remoteOID, localOID)
+		if err != nil {
+			return err
 		}
 
-		// Update to existing branch, examine new commits
-		commitRange = fmt.Sprintf("%s..%s", remoteOID, localOID)
+		commitRange := fmt.Sprintf("%s..%s", baseOID, localOID)
 
 		// Check commits in the range
 		checkErr := checkCommits(config, repo, commitRange, localRef)
@@ -310,6 +336,33 @@ func getCommitsInRange(repo *git.Repository, oldCommit string, newCommit string)
 	}
 
 	return commits, nil
+}
+
+// isAncestorOf checks if ancestorHash is an ancestor of (or equal to) descendantHash
+// by walking the commit graph from descendant backwards.
+func isAncestorOf(repo *git.Repository, ancestorHash string, descendantHash string) (bool, error) {
+	descendant, err := repo.CommitObject(plumbing.NewHash(descendantHash))
+	if err != nil {
+		return false, fmt.Errorf("failed to get descendant commit %s: %w", descendantHash, err)
+	}
+
+	ancestor := plumbing.NewHash(ancestorHash)
+
+	found := false
+	iter := object.NewCommitIterCTime(descendant, nil, nil)
+	err = iter.ForEach(func(c *object.Commit) error {
+		if c.Hash == ancestor {
+			found = true
+			return storer.ErrStop
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to iterate commits: %w", err)
+	}
+
+	return found, nil
 }
 
 // getCommitsUpTo returns all commits up to and including the specified commit.
