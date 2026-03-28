@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -20,7 +22,22 @@ const (
 
 	gitZeroHash    = "0000000000000000000000000000000000000000"
 	defaultMainRef = "main"
+	currentDir     = "."
 )
+
+// isKnownCommitMsgBasename reports whether name is one of the filenames git
+// uses when invoking the commit-msg hook. This lets the tool recognise bare
+// filenames like "COMMIT_EDITMSG" (no directory component) in addition to the
+// normal ".git/COMMIT_EDITMSG" path form.
+func isKnownCommitMsgBasename(name string) bool {
+	switch name {
+	case "COMMIT_EDITMSG", "MERGE_MSG", "SQUASH_MSG":
+		return true
+
+	default:
+		return false
+	}
+}
 
 // parseArgs parses command-line arguments and returns base and head refs.
 // Returns empty strings if no flags are provided (stdin mode).
@@ -171,7 +188,8 @@ func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 func validateCommits(config *Config, commits []*object.Commit, refName string) error {
 	for _, commit := range commits {
 		// Skip merge commits if configured
-		if config.Settings.SkipMergeCommits && len(commit.ParentHashes) > 1 {
+		if config.Settings.SkipMergeCommits != nil && *config.Settings.SkipMergeCommits &&
+			len(commit.ParentHashes) > 1 {
 			continue
 		}
 
@@ -228,11 +246,69 @@ func runArgsMode(config *Config, repo *git.Repository, baseRef string, headRef s
 	return validateCommits(config, commits, refName)
 }
 
-// Run reads git pre-push hook input from stdin and validates commit messages.
-// If args contains CLI flags, it validates the specified commit range instead.
+// stripCommentLines removes lines starting with '#' from a commit message.
+// Git adds comment lines (e.g. hints, status) to the commit message file; these must
+// be stripped before linting so they do not trigger rule violations.
+func stripCommentLines(msg string) string {
+	lines := strings.Split(msg, "\n")
+	filtered := lines[:0]
+
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "#") {
+			filtered = append(filtered, line)
+		}
+	}
+
+	return strings.Join(filtered, "\n")
+}
+
+// isMergeInProgress reports whether a merge is currently in progress by checking
+// whether the MERGE_HEAD reference exists in the repository.
+func isMergeInProgress(repo *git.Repository) bool {
+	_, err := repo.Storer.Reference(plumbing.ReferenceName("MERGE_HEAD"))
+
+	return err == nil
+}
+
+// runCommitMsgHookMode validates a single commit message read from msgFilePath.
+// This is used when the binary is invoked as a git commit-msg hook.
+// Note: skip_authors is not evaluated in this mode because the commit author is
+// not yet determined at commit-msg hook time.
+func runCommitMsgHookMode(config *Config, repo *git.Repository, msgFilePath string) error {
+	// Skip merge commits if configured
+	if config.Settings.SkipMergeCommits != nil && *config.Settings.SkipMergeCommits && isMergeInProgress(repo) {
+		return nil
+	}
+
+	msgBytes, err := os.ReadFile(msgFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read commit message file: %w", err)
+	}
+
+	message := stripCommentLines(string(msgBytes))
+	parsed := ParseCommitMessage(message)
+	violations := EvaluateRules(config.Rules, parsed)
+
+	if len(violations) == 0 {
+		return nil
+	}
+
+	violationsToShow := violations
+	if config.Settings.FailFast {
+		violationsToShow = violations[:1]
+	}
+
+	return formatMessageViolationError(msgFilePath, violationsToShow)
+}
+
+// Run validates commit messages.
+// Mode is auto-detected from the arguments:
+//   - If --base-ref / --head-ref flags are present: CI mode (validate commit range)
+//   - If args[1] is an existing file: commit-msg hook mode (validate that file)
+//   - Otherwise: pre-push hook mode (read refs from stdin)
 func Run(stdin io.Reader, args []string) error {
 	// Load configuration from .commit-msg-lint.yml
-	config, err := LoadConfig(".")
+	config, err := LoadConfig(currentDir)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -248,23 +324,61 @@ func Run(stdin io.Reader, args []string) error {
 		return err
 	}
 
-	// Apply default for skip_merge_commits if not explicitly set
-	if !config.Settings.SkipMergeCommits {
-		config.Settings.SkipMergeCommits = true
+	// Apply default for skip_merge_commits if not explicitly set in config
+	if config.Settings.SkipMergeCommits == nil {
+		defaultTrue := true
+		config.Settings.SkipMergeCommits = &defaultTrue
 	}
 
-	repo, err := git.PlainOpen(".")
+	repo, err := git.PlainOpen(currentDir)
 	if err != nil {
 		return fmt.Errorf("failed to open git repository: %w", err)
 	}
 
 	// Dispatch based on input mode
 	if headRef != "" {
-		// CLI mode: validate between base and head refs
+		// CI mode: validate between base and head refs
 		return runArgsMode(config, repo, baseRef, headRef)
 	}
 
-	// Stdin mode: read from stdin (pre-push hook)
+	// Auto-detect commit-msg hook mode: git always passes the commit message file as a
+	// path with a directory component (e.g. .git/COMMIT_EDITMSG). The basename may also
+	// match a known git commit message filename for invocations without a path separator.
+	// Remote names used by pre-push hooks (e.g. "origin") have neither property.
+	if len(args) >= 2 && (filepath.Dir(args[1]) != currentDir || isKnownCommitMsgBasename(filepath.Base(args[1]))) {
+		info, statErr := os.Stat(args[1])
+		if statErr == nil && info.Mode().IsRegular() {
+			return runCommitMsgHookMode(config, repo, args[1])
+		}
+	}
+
+	// Pre-push hook mode: read from stdin
+	return runStdinMode(config, repo, stdin)
+}
+
+// RunPrePushHook validates commits from git pre-push hook input on stdin.
+// Use this entry point when the binary is explicitly deployed as a pre-push hook,
+// bypassing the auto-detection in Run.
+func RunPrePushHook(stdin io.Reader, _ []string) error {
+	config, err := LoadConfig(currentDir)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if config.Settings.MainRef == "" {
+		config.Settings.MainRef = defaultMainRef
+	}
+
+	if config.Settings.SkipMergeCommits == nil {
+		defaultTrue := true
+		config.Settings.SkipMergeCommits = &defaultTrue
+	}
+
+	repo, err := git.PlainOpen(currentDir)
+	if err != nil {
+		return fmt.Errorf("failed to open git repository: %w", err)
+	}
+
 	return runStdinMode(config, repo, stdin)
 }
 

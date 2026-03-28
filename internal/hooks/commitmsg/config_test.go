@@ -116,7 +116,7 @@ settings:
 					t.Error("expected FailFast to be true")
 				}
 
-				if !config.Settings.SkipMergeCommits {
+				if config.Settings.SkipMergeCommits == nil || !*config.Settings.SkipMergeCommits {
 					t.Error("expected SkipMergeCommits to be true")
 				}
 
