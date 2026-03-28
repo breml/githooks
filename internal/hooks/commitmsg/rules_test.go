@@ -285,6 +285,90 @@ func TestEvaluateRules(t *testing.T) {
 			wantViolations: 1,
 		},
 		{
+			name: "no-co-authored-by-agent - Copilot in footer rejected",
+			configYAML: `rules:
+  - name: no-co-authored-by-agent
+    type: deny
+    scope: message
+    pattern: '(?im)(?:^Co-Authored-By: (?:Claude|Amp|Gemini|Copilot))'
+`,
+			message: commitmsg.ParsedCommitMessage{
+				Raw:    "feat: add feature\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+				Title:  "feat: add feature",
+				Body:   "",
+				Footer: "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+			},
+			wantViolations: 1,
+		},
+		{
+			name: "no-co-authored-by-agent - Claude in footer rejected",
+			configYAML: `rules:
+  - name: no-co-authored-by-agent
+    type: deny
+    scope: message
+    pattern: '(?im)(?:^Co-Authored-By: (?:Claude|Amp|Gemini|Copilot))'
+`,
+			message: commitmsg.ParsedCommitMessage{
+				Raw:    "feat: add feature\n\nCo-authored-by: Claude <claude@anthropic.com>",
+				Title:  "feat: add feature",
+				Body:   "",
+				Footer: "Co-authored-by: Claude <claude@anthropic.com>",
+			},
+			wantViolations: 1,
+		},
+		{
+			name: "no-co-authored-by-agent - human co-author accepted",
+			configYAML: `rules:
+  - name: no-co-authored-by-agent
+    type: deny
+    scope: message
+    pattern: '(?im)(?:^Co-Authored-By: (?:Claude|Amp|Gemini|Copilot))'
+`,
+			message: commitmsg.ParsedCommitMessage{
+				Raw:    "feat: add feature\n\nCo-authored-by: SomeHuman Dev <human@example.com>",
+				Title:  "feat: add feature",
+				Body:   "",
+				Footer: "Co-authored-by: SomeHuman Dev <human@example.com>",
+			},
+			wantViolations: 0,
+		},
+		{
+			name: "no-co-authored-by-agent - Copilot in multi-section message rejected",
+			configYAML: `rules:
+  - name: no-co-authored-by-agent
+    type: deny
+    scope: message
+    pattern: '(?im)(?:^Co-Authored-By: (?:Claude|Amp|Gemini|Copilot))'
+`,
+			message: commitmsg.ParsedCommitMessage{
+				Raw: "Add ExecShell, OpenTextConsole, and OpenVGAConsole tea.Cmd factories\n" +
+					"in internal/backend/exec.go that suspend the TUI via tea.ExecProcess,\n" +
+					"hand off to the incus binary through CLIRunner, and deliver ExecDoneMsg\n" +
+					"or ConsoleDoneMsg on return.\n" +
+					"\n" +
+					"Wire e/c/v keybindings into App.Update: e runs exec shell, c opens a\n" +
+					"text console, v opens a VGA console (silently ignored for containers).\n" +
+					"On return, any non-nil error is shown as a flash message and\n" +
+					"FetchInstances is triggered to refresh state.\n" +
+					"\n" +
+					"Closes: #15\n" +
+					"\n" +
+					"Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+				Title: "Add ExecShell, OpenTextConsole, and OpenVGAConsole tea.Cmd factories\n" +
+					"in internal/backend/exec.go that suspend the TUI via tea.ExecProcess,\n" +
+					"hand off to the incus binary through CLIRunner, and deliver ExecDoneMsg\n" +
+					"or ConsoleDoneMsg on return.",
+				Body: "Wire e/c/v keybindings into App.Update: e runs exec shell, c opens a\n" +
+					"text console, v opens a VGA console (silently ignored for containers).\n" +
+					"On return, any non-nil error is shown as a flash message and\n" +
+					"FetchInstances is triggered to refresh state.\n" +
+					"\n" +
+					"Closes: #15",
+				Footer: "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+			},
+			wantViolations: 1,
+		},
+		{
 			name: "empty scope text - deny rule passes",
 			configYAML: `rules:
   - name: no-bad-word

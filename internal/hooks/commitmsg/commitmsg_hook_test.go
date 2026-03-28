@@ -292,6 +292,111 @@ func TestRunPrePushHook(t *testing.T) {
 	}
 }
 
+const noCoAuthoredByAgentConfig = `rules:
+  - name: no-co-authored-by-agent
+    type: deny
+    scope: message
+    pattern: '(?im)(?:^Co-Authored-By: (?:Claude|Amp|Gemini|Copilot))'
+    message: "Commit messages must not contain 'Co-Authored-By: ' lines from agents"
+`
+
+func TestRunCommitMsgHookNoCoAuthoredByAgent(t *testing.T) {
+	tests := []struct {
+		name          string
+		messageInFile string
+		wantErr       bool
+		description   string
+	}{
+		{
+			name:          "Copilot co-authored-by rejected",
+			messageInFile: "feat: add feature\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n",
+			wantErr:       true,
+			description:   "Co-authored-by: Copilot must be rejected",
+		},
+		{
+			name:          "Claude co-authored-by rejected",
+			messageInFile: "feat: add feature\n\nCo-authored-by: Claude <claude@anthropic.com>\n",
+			wantErr:       true,
+			description:   "Co-authored-by: Claude must be rejected",
+		},
+		{
+			name:          "Gemini co-authored-by rejected",
+			messageInFile: "feat: add feature\n\nCo-authored-by: Gemini <gemini@google.com>\n",
+			wantErr:       true,
+			description:   "Co-authored-by: Gemini must be rejected",
+		},
+		{
+			name:          "Amp co-authored-by rejected",
+			messageInFile: "feat: add feature\n\nCo-authored-by: Amp <amp@example.com>\n",
+			wantErr:       true,
+			description:   "Co-authored-by: Amp must be rejected",
+		},
+		{
+			name:          "case-insensitive match rejected",
+			messageInFile: "feat: add feature\n\nCO-AUTHORED-BY: COPILOT <223556219+Copilot@users.noreply.github.com>\n",
+			wantErr:       true,
+			description:   "Rule must match regardless of case",
+		},
+		{
+			name:          "human co-authored-by accepted",
+			messageInFile: "feat: add feature\n\nCo-authored-by: SomeHuman Dev <human@example.com>\n",
+			wantErr:       false,
+			description:   "Co-authored-by: a human author must not be rejected",
+		},
+		{
+			name:          "clean message accepted",
+			messageInFile: "feat: add feature\n",
+			wantErr:       false,
+			description:   "Message without Co-authored-by must pass",
+		},
+		{
+			name: "co-authored-by in git comment line is ignored",
+			messageInFile: "feat: add feature\n" +
+				"# Co-authored-by: Claude <claude@anthropic.com>\n",
+			wantErr:     false,
+			description: "Co-authored-by inside a git comment line must be stripped and not trigger the rule",
+		},
+		{
+			name: "exact example commit that slipped through",
+			messageInFile: "Add ExecShell, OpenTextConsole, and OpenVGAConsole tea.Cmd factories\n" +
+				"in internal/backend/exec.go that suspend the TUI via tea.ExecProcess,\n" +
+				"hand off to the incus binary through CLIRunner, and deliver ExecDoneMsg\n" +
+				"or ConsoleDoneMsg on return.\n" +
+				"\n" +
+				"Wire e/c/v keybindings into App.Update: e runs exec shell, c opens a\n" +
+				"text console, v opens a VGA console (silently ignored for containers).\n" +
+				"On return, any non-nil error is shown as a flash message and\n" +
+				"FetchInstances is triggered to refresh state.\n" +
+				"\n" +
+				"Closes: #15\n" +
+				"\n" +
+				"Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>\n",
+			wantErr:     true,
+			description: "The exact example commit with Co-authored-by: Copilot must be rejected",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir, _, _ := createTestRepo(t, nil)
+			writeConfigFile(t, tmpDir, noCoAuthoredByAgentConfig)
+			t.Chdir(tmpDir)
+
+			msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+			writeErr := os.WriteFile(msgFile, []byte(tc.messageInFile), 0o644)
+			if writeErr != nil {
+				t.Fatalf("failed to write message file: %v", writeErr)
+			}
+
+			err := commitmsg.Run(strings.NewReader(""), []string{"commit-msg-lint", msgFile})
+
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Run() error = %v, wantErr %v (%s)", err, tc.wantErr, tc.description)
+			}
+		})
+	}
+}
+
 func TestAutoDetect(t *testing.T) {
 	tmpDir, _, _ := createTestRepo(t, []commit{
 		{message: "Initial commit", files: map[string]string{"file1.txt": "content1"}},
