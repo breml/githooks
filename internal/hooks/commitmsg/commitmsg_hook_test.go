@@ -195,6 +195,42 @@ settings:
 	}
 }
 
+func TestRunCommitMsgHookRejectsMergeCommitWhenNotSkipped(t *testing.T) {
+	tmpDir, repo, hashes := createTestRepo(t, []commit{
+		{message: "Initial commit", files: map[string]string{"file1.txt": "content1"}},
+	})
+	// Explicitly set skip_merge_commits: false — merge commits must NOT be skipped.
+	writeConfigFile(t, tmpDir, `rules:
+  - name: prevent-wip
+    type: deny
+    scope: title
+    pattern: '(?i)(?:^|[\s\(\)])(wip)(?:[\s\(\):]|$)'
+    message: "WIP commits are not allowed"
+settings:
+  skip_merge_commits: false
+`)
+	t.Chdir(tmpDir)
+
+	// Simulate merge in progress
+	mergeRef := plumbing.NewHashReference(plumbing.ReferenceName("MERGE_HEAD"), hashes[0])
+	err := repo.Storer.SetReference(mergeRef)
+	if err != nil {
+		t.Fatalf("failed to set MERGE_HEAD: %v", err)
+	}
+
+	msgFile := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+	writeErr := os.WriteFile(msgFile, []byte("WIP: merge in progress\n"), 0o644)
+	if writeErr != nil {
+		t.Fatalf("failed to write message file: %v", writeErr)
+	}
+
+	// skip_merge_commits is explicitly false, so the WIP message must be rejected
+	runErr := commitmsg.Run(strings.NewReader(""), []string{"commit-msg-lint", msgFile})
+	if runErr == nil {
+		t.Error("Run() expected error for WIP message when skip_merge_commits: false, got nil")
+	}
+}
+
 func TestRunPrePushHook(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -314,6 +350,31 @@ func TestAutoDetect(t *testing.T) {
 		)
 		if err != nil {
 			t.Errorf("Run() returned unexpected error when file named like remote exists: %v", err)
+		}
+	})
+
+	t.Run("bare known commit-msg filename triggers commit-msg mode", func(t *testing.T) {
+		// Write a WIP message as a bare "COMMIT_EDITMSG" (no path separator).
+		// Even without a directory component the known basename must trigger commit-msg
+		// mode, so the bad message is caught and Run() must return an error.
+		bareMsg := filepath.Join(tmpDir, "COMMIT_EDITMSG_bare")
+		writeErr := os.WriteFile(bareMsg, []byte("WIP: bare filename test\n"), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write bare message file: %v", writeErr)
+		}
+
+		// Rename so the basename is exactly "COMMIT_EDITMSG" but there is no dir separator
+		// in args[1] — achieved by changing to the directory first so we can pass just the
+		// base name. t.Chdir already set the CWD to tmpDir.
+		bareName := filepath.Join(tmpDir, "COMMIT_EDITMSG")
+		writeErr = os.WriteFile(bareName, []byte("WIP: bare filename test\n"), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write COMMIT_EDITMSG file: %v", writeErr)
+		}
+
+		err := commitmsg.Run(strings.NewReader(""), []string{"commit-msg-lint", "COMMIT_EDITMSG"})
+		if err == nil {
+			t.Error("Run() expected error for WIP message via bare COMMIT_EDITMSG, got nil")
 		}
 	})
 }

@@ -25,6 +25,20 @@ const (
 	currentDir     = "."
 )
 
+// isKnownCommitMsgBasename reports whether name is one of the filenames git
+// uses when invoking the commit-msg hook. This lets the tool recognise bare
+// filenames like "COMMIT_EDITMSG" (no directory component) in addition to the
+// normal ".git/COMMIT_EDITMSG" path form.
+func isKnownCommitMsgBasename(name string) bool {
+	switch name {
+	case "COMMIT_EDITMSG", "MERGE_MSG", "SQUASH_MSG":
+		return true
+
+	default:
+		return false
+	}
+}
+
 // parseArgs parses command-line arguments and returns base and head refs.
 // Returns empty strings if no flags are provided (stdin mode).
 func parseArgs(config *Config, args []string) (baseRef string, headRef string, err error) {
@@ -174,7 +188,8 @@ func runStdinMode(config *Config, repo *git.Repository, stdin io.Reader) error {
 func validateCommits(config *Config, commits []*object.Commit, refName string) error {
 	for _, commit := range commits {
 		// Skip merge commits if configured
-		if config.Settings.SkipMergeCommits && len(commit.ParentHashes) > 1 {
+		if config.Settings.SkipMergeCommits != nil && *config.Settings.SkipMergeCommits &&
+			len(commit.ParentHashes) > 1 {
 			continue
 		}
 
@@ -261,7 +276,7 @@ func isMergeInProgress(repo *git.Repository) bool {
 // not yet determined at commit-msg hook time.
 func runCommitMsgHookMode(config *Config, repo *git.Repository, msgFilePath string) error {
 	// Skip merge commits if configured
-	if config.Settings.SkipMergeCommits && isMergeInProgress(repo) {
+	if config.Settings.SkipMergeCommits != nil && *config.Settings.SkipMergeCommits && isMergeInProgress(repo) {
 		return nil
 	}
 
@@ -309,9 +324,10 @@ func Run(stdin io.Reader, args []string) error {
 		return err
 	}
 
-	// Apply default for skip_merge_commits if not explicitly set
-	if !config.Settings.SkipMergeCommits {
-		config.Settings.SkipMergeCommits = true
+	// Apply default for skip_merge_commits if not explicitly set in config
+	if config.Settings.SkipMergeCommits == nil {
+		defaultTrue := true
+		config.Settings.SkipMergeCommits = &defaultTrue
 	}
 
 	repo, err := git.PlainOpen(currentDir)
@@ -326,11 +342,10 @@ func Run(stdin io.Reader, args []string) error {
 	}
 
 	// Auto-detect commit-msg hook mode: git always passes the commit message file as a
-	// path with a directory component (e.g. .git/COMMIT_EDITMSG). Remote names used by
-	// pre-push hooks are bare names like "origin" and never contain a path separator,
-	// so checking filepath.Dir avoids false positives even when a file named "origin"
-	// happens to exist in the working directory.
-	if len(args) >= 2 && filepath.Dir(args[1]) != currentDir {
+	// path with a directory component (e.g. .git/COMMIT_EDITMSG). The basename may also
+	// match a known git commit message filename for invocations without a path separator.
+	// Remote names used by pre-push hooks (e.g. "origin") have neither property.
+	if len(args) >= 2 && (filepath.Dir(args[1]) != currentDir || isKnownCommitMsgBasename(filepath.Base(args[1]))) {
 		info, statErr := os.Stat(args[1])
 		if statErr == nil && info.Mode().IsRegular() {
 			return runCommitMsgHookMode(config, repo, args[1])
@@ -354,8 +369,9 @@ func RunPrePushHook(stdin io.Reader, _ []string) error {
 		config.Settings.MainRef = defaultMainRef
 	}
 
-	if !config.Settings.SkipMergeCommits {
-		config.Settings.SkipMergeCommits = true
+	if config.Settings.SkipMergeCommits == nil {
+		defaultTrue := true
+		config.Settings.SkipMergeCommits = &defaultTrue
 	}
 
 	repo, err := git.PlainOpen(currentDir)
