@@ -44,6 +44,30 @@ func getViolationMessage(v RuleViolation) string {
 	return fmt.Sprintf("Pattern must match in %s", v.Rule.Scope)
 }
 
+// formatMessageViolationError creates a detailed error message for rule violations
+// found in a commit message file, without requiring a commit object.
+// Used in commit-msg hook mode where the commit has not yet been created.
+func formatMessageViolationError(msgFilePath string, violations []RuleViolation) error {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("Commit message in %s failed validation:\n\n", msgFilePath))
+
+	sb.WriteString("Rule violations:\n")
+	for i, v := range violations {
+		sb.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, v.Rule.Name, getViolationMessage(v)))
+
+		if v.Rule.Type == RuleTypeDeny {
+			sb.WriteString(fmt.Sprintf("     Pattern %q was found in %s (deny rule)\n", v.Rule.Pattern, v.Rule.Scope))
+		} else {
+			sb.WriteString(
+				fmt.Sprintf("     Pattern %q was not found in %s (require rule)\n", v.Rule.Pattern, v.Rule.Scope),
+			)
+		}
+	}
+
+	return fmt.Errorf("%s", sb.String())
+}
+
 // getFirstLine extracts and returns the first line of a commit message.
 func getFirstLine(message string) string {
 	lines := strings.Split(message, "\n")

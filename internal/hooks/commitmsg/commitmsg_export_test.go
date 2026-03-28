@@ -16,3 +16,13 @@ func ParseArgsForTesting(config *Config, args []string) (baseRef string, headRef
 func ResolveRefOrSHAForTesting(repo *git.Repository, refOrSHA string) (*object.Commit, error) {
 	return resolveRefOrSHA(repo, refOrSHA)
 }
+
+// StripCommentLinesForTesting exposes stripCommentLines for testing.
+func StripCommentLinesForTesting(msg string) string {
+	return stripCommentLines(msg)
+}
+
+// IsMergeInProgressForTesting exposes isMergeInProgress for testing.
+func IsMergeInProgressForTesting(repo *git.Repository) bool {
+	return isMergeInProgress(repo)
+}

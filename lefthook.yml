@@ -33,12 +33,16 @@ pre-push:
       stage_fixed: true
     - name: Run tests
       run: go test -v ./...
+    - name: Build commit-msg-lint-prepush
+      run: go build -v -o bin/commit-msg-lint-prepush github.com/breml/githooks/cmd/commit-msg-lint-prepush
+    - name: Run commit-msg-lint-prepush
+      run: bin/commit-msg-lint-prepush
+      use_stdin: true
 
 commit-msg:
   # Dogfood hooks
   jobs:
-    - name: Build all hooks
+    - name: Build commit-msg-lint
       run: go build -v -o bin/commit-msg-lint github.com/breml/githooks/cmd/commit-msg-lint
-    - name: Run all hooks
-      run: bin/commit-msg-lint
-      use_stdin: true
+    - name: Run commit-msg-lint
+      run: bin/commit-msg-lint {1}
