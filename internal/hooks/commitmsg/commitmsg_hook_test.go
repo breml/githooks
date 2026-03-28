@@ -296,4 +296,24 @@ func TestAutoDetect(t *testing.T) {
 			t.Errorf("Run() returned unexpected error with no args: %v", err)
 		}
 	})
+
+	t.Run("bare filename matching remote name triggers pre-push mode", func(t *testing.T) {
+		// Create a file named "origin" with a WIP message in the working directory.
+		// Even though os.Stat would find it, Run() must not treat it as the commit
+		// message file because it lacks a path separator — it stays in pre-push mode
+		// and empty stdin (no refs) should pass without error.
+		originPath := filepath.Join(tmpDir, "origin")
+		writeErr := os.WriteFile(originPath, []byte("WIP: do something\n"), 0o644)
+		if writeErr != nil {
+			t.Fatalf("failed to write origin file: %v", writeErr)
+		}
+
+		err := commitmsg.Run(
+			strings.NewReader(""),
+			[]string{"commit-msg-lint", "origin", "https://example.com/repo.git"},
+		)
+		if err != nil {
+			t.Errorf("Run() returned unexpected error when file named like remote exists: %v", err)
+		}
+	})
 }

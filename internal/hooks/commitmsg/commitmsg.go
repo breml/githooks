@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -324,12 +325,14 @@ func Run(stdin io.Reader, args []string) error {
 		return runArgsMode(config, repo, baseRef, headRef)
 	}
 
-	// Auto-detect commit-msg hook mode: git passes the commit message file as args[1],
-	// which is always an existing regular file. Remote names (used by pre-push hooks)
-	// are never file paths.
-	if len(args) >= 2 {
+	// Auto-detect commit-msg hook mode: git always passes the commit message file as a
+	// path with a directory component (e.g. .git/COMMIT_EDITMSG). Remote names used by
+	// pre-push hooks are bare names like "origin" and never contain a path separator,
+	// so checking filepath.Dir avoids false positives even when a file named "origin"
+	// happens to exist in the working directory.
+	if len(args) >= 2 && filepath.Dir(args[1]) != currentDir {
 		info, statErr := os.Stat(args[1])
-		if statErr == nil && !info.IsDir() {
+		if statErr == nil && info.Mode().IsRegular() {
 			return runCommitMsgHookMode(config, repo, args[1])
 		}
 	}
