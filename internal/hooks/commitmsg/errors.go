@@ -7,11 +7,14 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
+// shortHashLen is the number of hex characters used for abbreviated commit hashes.
+const shortHashLen = 7
+
 // formatViolationError creates a detailed error message for rule violations.
 func formatViolationError(commit *object.Commit, ref string, violations []RuleViolation) error {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Commit %s in %s failed validation:\n", commit.Hash.String()[:7], ref))
+	sb.WriteString(fmt.Sprintf("Commit %s in %s failed validation:\n", commit.Hash.String()[:shortHashLen], ref))
 	sb.WriteString(fmt.Sprintf("Commit message: %s\n\n", getFirstLine(commit.Message)))
 
 	sb.WriteString("Rule violations:\n")

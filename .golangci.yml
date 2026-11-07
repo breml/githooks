@@ -56,7 +56,7 @@ linters:
     - errname # checks that sentinel errors are prefixed with the Err and error types are suffixed with the Error
     - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13
     - exhaustive # checks exhaustiveness of enum switch statements
-    - exhaustruct # checks if all structure fields are initialized
+    - exhaustruct_v5 # checks if all structure fields are initialized
     - exptostd # detects functions from golang.org/x/exp/ that can be replaced by std functions
     - fatcontext # detects nested contexts in loops
     - forbidigo # forbids identifiers
@@ -181,17 +181,17 @@ linters:
       # Default: [ switch ]
       check:
         - switch
-        - map
+        - mapliteral
 
-    exhaustruct:
-      # List of regular expressions to match type names that should be excluded from processing.
+    exhaustruct_v5:
+      # List of regular expressions to match type names that should be skipped from checking.
       # Anonymous structs can be matched by '<anonymous>' alias.
       # Has precedence over `include`.
       # Each regular expression must match the full type name, including package path.
       # For example, to match type `net/http.Cookie` regular expression should be `.*/http\.Cookie`,
       # but not `http\.Cookie`.
       # Default: []
-      exclude:
+      ignore-patterns:
         # std libs
         - ^net/http.Client$
         - ^net/http.Cookie$
@@ -795,7 +795,7 @@ linters:
       - path: '_test\.go'
         linters:
           - dupl
-          - exhaustruct
+          - exhaustruct_v5
           - gosec
           - noctx
           - wrapcheck
